@@ -1,0 +1,90 @@
+doctype 5
+html(ng-app)
+  head
+    script(src='http://ajax.googleapis.com/ajax/libs/angularjs/1.0.3/angular.js')
+
+    script
+      function BBOController($scope, $http, $timeout) {
+        $scope.data = {};
+        var query = function() {
+          $http.get('/bbo.json').success(function(data) {
+            $scope.data = data;
+          });
+          $timeout(query, 250);
+        };
+
+        $timeout(query, 250);
+      }
+
+      function StocksListController($scope, $http, $window) {
+        $scope.stocksList = [];
+
+        $scope.newStock = {};
+
+        $scope.init = function(stocksList) {
+          $scope.stocksList = stocksList;
+        }
+
+        $scope.save = function(form) {
+          $http.post('/stock.json', { stock : $scope.newStock }).success(function(response) {
+            // Remove all error markers
+            for (key in form) {
+              if (form[key].$error) {
+                form[key].$error.mongoose = null;
+              }
+            }
+
+            if (response.error) {
+              // We got some errors, put them into angular
+              for (key in response.error.errors) {
+                form[key].$error.mongoose = response.error.errors[key].type;
+              }
+            } else if (response.stocksList) {
+              $scope.stocksList = response.stocksList;
+              $scope.newStock = {};
+            }
+          });
+        };
+
+        $scope.currentPortfolioValue = function() {
+          var sum = 0;
+          for (var i = 0; i < $scope.stocksList.stocks.length; ++i) {
+            sum += $scope.stocksList.stocks[i].price * $scope.stocksList.stocks[i].quantity;
+          }
+          return sum;
+        };
+
+        $scope.currentPortfolioQuantity = function() {
+          var sum = 0;
+          for (var i = 0; i < $scope.stocksList.stocks.length; ++i) {
+            sum += $scope.stocksList.stocks[i].quantity;
+          }
+          return sum;
+        };
+      }
+
+  body
+    div(ng-controller="StocksListController", ng-init="init( #{JSON.stringify(stocksList)} );")
+      | Add a Bitcoin trade:
+      br
+      form(name="stocksForm", ng-submit="save(stocksForm)")
+        input(type="number", ng-model="newStock.price", name="price", placeholder="Price")
+        div(ng-show="stocksForm['price'].$error.mongoose", style="color: red")
+          {{stocksForm['price'].$error.mongoose}}
+        br
+        input(type="number", ng-model="newStock.quantity", name="quantity", placeholder="Quantity")
+        div(ng-show="stocksForm.quantity.$error.mongoose", style="color: red")
+          {{stocksForm.quantity.$error.mongoose}}
+        br
+        input(type="submit")
+      br
+      hr
+      div(ng-controller="BBOController")
+        | Current Best Bid : {{data.bid}}
+        br
+        | PNL :
+        | {{currentPortfolioQuantity() * data.bid - currentPortfolioValue()}}
+      hr
+      br
+      div(ng-repeat="stock in stocksList.stocks")
+        | Bitcoin Price : {{stock.price}}, Quantity : {{stock.quantity}}
